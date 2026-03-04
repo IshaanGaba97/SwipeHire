@@ -1,0 +1,222 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://neondb_owner:npg_Ov6pRiX9euJk@ep-quiet-wind-air8z1wo-pooler.c-4.us-east-1.aws.neon.tech/neondb"
+}
+
+enum UserRole {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+}
+
+enum WorkType {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum ApplicationStatus {
+  APPLIED
+  VIEWED
+  SHORTLISTED
+  INTERVIEW_SCHEDULED
+  REJECTED
+  OFFER_RECEIVED
+}
+
+enum SwipeDirection {
+  LEFT
+  RIGHT
+  SUPER
+}
+
+enum SwipeTargetType {
+  JOB
+  CANDIDATE
+}
+
+enum InterviewStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum NotificationType {
+  PROFILE_VIEWED
+  SHORTLISTED
+  INTERVIEW_SCHEDULED
+  NEW_MESSAGE
+  APPLICATION_UPDATE
+}
+
+// ===== CORE MODELS =====
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String
+  role          UserRole
+  avatar        String?
+  googleId      String?   @unique
+  linkedinId    String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  candidateProfile CandidateProfile?
+  company          Company?
+  sentMessages     Message[]       @relation("SentMessages")
+  receivedMessages Message[]       @relation("ReceivedMessages")
+  swipes           Swipe[]
+  notifications    Notification[]
+  interviews       Interview[]
+
+  @@map("users")
+}
+
+model CandidateProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  headline         String?
+  summary          String?
+  skills           String[]
+  experience       Json     @default("[]")
+  education        Json     @default("[]")
+  resumeUrl        String?
+  portfolioUrl     String?
+  githubUrl        String?
+  linkedinUrl      String?
+  locationPreference String?
+  salaryExpectation  Int?
+  aiSummary        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@map("candidate_profiles")
+}
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  logo        String?
+  website     String?
+  description String?
+  industry    String?
+  size        String?
+  verified    Boolean  @default(false)
+  recruiterId String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recruiter User  @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+  jobs      Job[]
+
+  @@map("companies")
+}
+
+model Job {
+  id            String   @id @default(uuid())
+  title         String
+  description   String
+  companyId     String
+  skills        String[]
+  salaryMin     Int?
+  salaryMax     Int?
+  location      String
+  workType      WorkType @default(REMOTE)
+  experienceMin Int?
+  experienceMax Int?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications Application[]
+  swipes       Swipe[]
+  interviews   Interview[]
+
+  @@map("jobs")
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  jobId       String
+  candidateId String
+  status      ApplicationStatus @default(APPLIED)
+  appliedAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  job       Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate CandidateProfile @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, candidateId])
+  @@map("applications")
+}
+
+model Swipe {
+  id         String          @id @default(uuid())
+  userId     String
+  targetId   String
+  targetType SwipeTargetType
+  direction  SwipeDirection
+  createdAt  DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job? @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetId, targetType])
+  @@map("swipes")
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  fileUrl    String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Interview {
+  id           String          @id @default(uuid())
+  jobId        String
+  candidateId  String
+  questions    Json            @default("[]")
+  status       InterviewStatus @default(PENDING)
+  overallScore Float?
+  aiSummary    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate User @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@map("interviews")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  content   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
